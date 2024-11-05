@@ -12,7 +12,7 @@ export default function XPathSelector() {
     }>>([]);
     const [isSelecting, setIsSelecting] = useState(false);
     const [error, setError] = useState('');
-    const [controlPanelWidth, setControlPanelWidth] = useState(320);
+    const [controlPanelWidth, setControlPanelWidth] = useState(400);
     const [loading, setLoading] = useState(false);
 
     const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -197,7 +197,7 @@ export default function XPathSelector() {
                                     );
                                 }}
                                 className="delete-xpath"
-                                title="删除"
+                                title="删除xxx"
                             >
                                 ×
                             </button>
