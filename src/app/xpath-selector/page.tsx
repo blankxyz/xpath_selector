@@ -8,6 +8,7 @@ export default function XPathSelector() {
     const [selectedXPaths, setSelectedXPaths] = useState<Array<{
         xpath: string;
         sample: string;
+        note: string;
     }>>([]);
     const [isSelecting, setIsSelecting] = useState(false);
     const [error, setError] = useState('');
@@ -79,7 +80,8 @@ export default function XPathSelector() {
     const exportResults = () => {
         const data = selectedXPaths.map(item => ({
             xpath: item.xpath,
-            sample: item.sample
+            sample: item.sample,
+            note: item.note || '无备注'
         }));
         const blob = new Blob(
             [JSON.stringify(data, null, 2)], 
@@ -100,7 +102,8 @@ export default function XPathSelector() {
                 const { xpath, innerHTML } = event.data;
                 setSelectedXPaths(prev => [...prev, {
                     xpath,
-                    sample: innerHTML.slice(0, 100) + (innerHTML.length > 100 ? '...' : '')
+                    sample: innerHTML.slice(0, 100) + (innerHTML.length > 100 ? '...' : ''),
+                    note: ''
                 }]);
             }
         };
@@ -116,6 +119,15 @@ export default function XPathSelector() {
             document.removeEventListener('mouseup', handleMouseUp);
         };
     }, []);
+
+    // 更新备注
+    const updateNote = (index: number, note: string) => {
+        setSelectedXPaths(prev => {
+            const newPaths = [...prev];
+            newPaths[index] = { ...newPaths[index], note };
+            return newPaths;
+        });
+    };
 
     return (
         <div className="selector-container">
@@ -166,10 +178,17 @@ export default function XPathSelector() {
                     </div>
 
                     {selectedXPaths.map((item, index) => (
-                        <div key={index} className="xpath-item">
+                            <div key={index} className="xpath-item">
                             <div className="xpath-content">
                                 <code className="xpath-code">{item.xpath}</code>
                                 <div className="xpath-sample">{item.sample}</div>
+                                <input
+                                    type="text"
+                                    className="xpath-note"
+                                    placeholder="添加备注..."
+                                    value={item.note}
+                                    onChange={(e) => updateNote(index, e.target.value)}
+                                />
                             </div>
                             <button 
                                 onClick={() => {
@@ -177,7 +196,7 @@ export default function XPathSelector() {
                                         prev.filter((_, i) => i !== index)
                                     );
                                 }}
-                                className="remove-button"
+                                className="delete-xpath"
                                 title="删除"
                             >
                                 ×
