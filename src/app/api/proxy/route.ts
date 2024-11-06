@@ -5,11 +5,11 @@ import iconv from 'iconv-lite';
 const selectorScript = `
 <script>
     (function() {
-        let isMouseDown = false;
+        let isSelecting = false;
         let selectedElements = new Set();
-        let lastHighlighted = null;
+        let selectionCount = 0;
 
-        // 获取元素的XPath
+       // 获取元素的XPath
         const getXPath = (element) => {
             if (!element) return '';
             if (element.nodeType !== 1) return '';
@@ -48,96 +48,62 @@ const selectorScript = `
             return '/' + path.join('/');
         };
 
-        // 获取两个元素的共同父元素
-        const findCommonAncestor = (el1, el2) => {
-            if (!el1 || !el2) return null;
-            
-            const path1 = [];
-            let parent = el1;
-            while (parent) {
-                path1.push(parent);
-                parent = parent.parentElement;
-            }
-            
-            parent = el2;
-            while (parent) {
-                if (path1.includes(parent)) {
-                    return parent;
-                }
-                parent = parent.parentElement;
-            }
-            
-            return null;
-        };
 
-        // 获取多个元素的共同父元素
-        const findCommonAncestorForAll = (elements) => {
-            if (!elements || elements.size === 0) return null;
-            if (elements.size === 1) return elements.values().next().value;
-            
-            const elementsArray = Array.from(elements);
-            let commonAncestor = elementsArray[0];
-            
-            for (let i = 1; i < elementsArray.length; i++) {
-                commonAncestor = findCommonAncestor(commonAncestor, elementsArray[i]);
-                if (!commonAncestor) break;
-            }
-            
-            return commonAncestor;
-        };
-
-        // 高亮元素
+        // 高亮元素并添加选择标记
         const highlightElement = (element) => {
-            if (element && element instanceof HTMLElement) {
+            if (element && element instanceof HTMLElement && 
+                !element.classList.contains('xpath-selection-marker')) {
+                selectionCount++;
                 element.classList.add('xpath-highlight');
+                element.setAttribute('data-selection-id', selectionCount.toString());
+                
+                // 添加选择标记
+                const marker = document.createElement('div');
+                marker.className = 'xpath-selection-marker';
+                marker.textContent = selectionCount.toString();
+                element.appendChild(marker);
+                
                 selectedElements.add(element);
             }
         };
 
-        // 处理鼠标移动
-        const handleMouseMove = (e) => {
-            if (!isMouseDown) return;
-            
-            const target = e.target;
-            if (target instanceof HTMLElement && !selectedElements.has(target)) {
-                highlightElement(target);
-            }
-        };
-
-        // 处理鼠标按下
-        const handleMouseDown = (e) => {
-            e.preventDefault();
-            isMouseDown = true;
-            selectedElements.clear();
-            const target = e.target;
-            if (target instanceof HTMLElement) {
-                highlightElement(target);
-            }
-        };
-
-        // 处理鼠标松开
-        const handleMouseUp = (e) => {
-            e.preventDefault();
-            isMouseDown = false;
-            
-            if (selectedElements.size > 0) {
-                const commonAncestor = findCommonAncestorForAll(selectedElements);
-                if (commonAncestor instanceof HTMLElement) {
-                    const xpath = getXPath(commonAncestor);
-                    window.parent.postMessage({ 
-                        type: 'XPATH_SELECTED', 
-                        xpath,
-                        innerHTML: commonAncestor.innerHTML.substring(0, 100),
-                        outerHTML: commonAncestor.outerHTML
-                    }, '*');
-                }
-            }
-            
-            // 清除所有高亮
+        // 清除所有高亮和标记
+        const clearHighlights = () => {
             selectedElements.forEach(element => {
                 element.classList.remove('xpath-highlight');
+                element.removeAttribute('data-selection-id');
+                const marker = element.querySelector('.xpath-selection-marker');
+                if (marker) {
+                    marker.remove();
+                }
             });
             selectedElements.clear();
+            selectionCount = 0;
+        };
+
+        // 处理点击事件
+        const handleClick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const target = e.target;
+            if (target instanceof HTMLElement && 
+                !target.classList.contains('xpath-selection-marker')) {
+                
+                clearHighlights();  // 清除之前的选择
+                highlightElement(target);  // 高亮当前选择
+
+                // 发送选中元素的信息
+                const xpath = getXPath(target);
+                window.parent.postMessage({ 
+                    type: 'XPATH_SELECTED', 
+                    xpath,
+                    innerHTML: target.innerHTML.substring(0, 100),
+                    outerHTML: target.outerHTML
+                }, '*');
+            }
+            
+            return false;
         };
 
         // 添加样式
@@ -163,6 +129,24 @@ const selectorScript = `
                 pointer-events: none;
                 z-index: 10000;
             }
+            .xpath-selection-marker {
+                position: absolute !important;
+                top: -10px !important;
+                left: -10px !important;
+                background-color: #FF4081 !important;
+                color: white !important;
+                border-radius: 50% !important;
+                width: 20px !important;
+                height: 20px !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                font-size: 12px !important;
+                font-weight: bold !important;
+                pointer-events: none !important;
+                z-index: 10001 !important;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
+            }
             a, button, input, select {
                 pointer-events: none !important;
             }
@@ -174,14 +158,18 @@ const selectorScript = `
 
         // 初始化选择器
         const initSelector = () => {
-            document.addEventListener('mousedown', handleMouseDown, true);
-            document.addEventListener('mousemove', handleMouseMove, true);
-            document.addEventListener('mouseup', handleMouseUp, true);
-            document.addEventListener('contextmenu', (e) => e.preventDefault(), true);
+            isSelecting = true;
             
-            // 禁用默认行为
-            document.addEventListener('dragstart', (e) => e.preventDefault(), true);
-            document.addEventListener('selectstart', (e) => e.preventDefault(), true);
+            // 禁用所有链接
+            document.querySelectorAll('a').forEach(a => {
+                a.style.pointerEvents = 'none';
+            });
+            
+            // 添加点击事件监听器
+            document.addEventListener('click', handleClick, true);
+            document.addEventListener('mousedown', (e) => e.preventDefault(), true);
+            document.addEventListener('mouseup', (e) => e.preventDefault(), true);
+            document.addEventListener('contextmenu', (e) => e.preventDefault(), true);
         };
 
         // 监听来自父窗口的消息
@@ -190,6 +178,14 @@ const selectorScript = `
                 initSelector();
             }
         });
+
+        // 防止页面跳转
+        window.onbeforeunload = (e) => {
+            if (isSelecting) {
+                e.preventDefault();
+                return false;
+            }
+        };
     })();
 </script>
 `;
