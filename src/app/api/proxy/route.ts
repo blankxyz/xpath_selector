@@ -5,24 +5,18 @@ import iconv from 'iconv-lite';
 const selectorScript = `
 <script>
     (function() {
-        const removeHighlight = () => {
-            document.querySelectorAll('.xpath-highlight').forEach(el => {
-                el.classList.remove('xpath-highlight');
-            });
-        };
+        let isSelecting = false;
+        let lastHighlighted = null;
 
+        // 获取元素的XPath
         const getXPath = (element) => {
             if (!element) return '';
-            
-            // 处理 document 和 document.body 等特殊情况
             if (element.nodeType !== 1) return '';
             
-            // 如果元素有 id，直接返回
             if (element.id) {
                 return '//*[@id="' + element.id + '"]';
             }
             
-            // 获取元素在同类型兄弟节点中的位置
             const getElementIndex = (element) => {
                 let index = 1;
                 let sibling = element.previousElementSibling;
@@ -36,14 +30,12 @@ const selectorScript = `
                 
                 return index;
             };
-
-            // 递归获取路径
+            
             const path = [];
             while (element && element.nodeType === 1) {
                 let selector = element.tagName.toLowerCase();
                 const index = getElementIndex(element);
                 
-                // 只有当同类型元素多于1个时才添加索引
                 if (element.parentElement && element.parentElement.getElementsByTagName(selector).length > 1) {
                     selector += '[' + index + ']';
                 }
@@ -55,43 +47,111 @@ const selectorScript = `
             return '/' + path.join('/');
         };
 
-        document.addEventListener('mousemove', (e) => {
-            e.stopPropagation();
-            removeHighlight();
-            const target = e.target;
-            if (target instanceof HTMLElement) {
-                target.classList.add('xpath-highlight');
+        // 移除高亮
+        const removeHighlight = () => {
+            if (lastHighlighted) {
+                lastHighlighted.classList.remove('xpath-highlight');
+                lastHighlighted = null;
             }
-        }, true);
+        };
 
-        document.addEventListener('click', (e) => {
+        // 处理鼠标移动
+        const handleMouseMove = (e) => {
+            const target = e.target;
+            if (target instanceof HTMLElement && target !== lastHighlighted) {
+                removeHighlight();
+                target.classList.add('xpath-highlight');
+                lastHighlighted = target;
+            }
+        };
+
+        // 处理点击
+        const handleClick = (e) => {
             e.preventDefault();
             e.stopPropagation();
             
             const target = e.target;
             if (target instanceof HTMLElement) {
                 const xpath = getXPath(target);
-                window.parent.postMessage({
-                    type: 'XPATH_SELECTED',
-                    xpath: xpath,
-                    innerHTML: target.innerHTML,
-                    outerHTML: target.outerHTML,
-                    tagName: target.tagName.toLowerCase(),
-                    className: target.className,
-                    id: target.id
+                window.parent.postMessage({ 
+                    type: 'XPATH_SELECTED', 
+                    xpath,
+                    innerHTML: target.innerHTML.substring(0, 100),
+                    outerHTML: target.outerHTML
                 }, '*');
             }
-        }, true);
+            
+            return false;
+        };
 
-        document.addEventListener('mousedown', (e) => e.preventDefault(), true);
-        document.addEventListener('mouseup', (e) => e.preventDefault(), true);
-        document.addEventListener('keydown', (e) => e.preventDefault(), true);
-        document.addEventListener('keyup', (e) => e.preventDefault(), true);
-        
-        document.querySelectorAll('a').forEach(a => {
-            a.style.cursor = 'pointer';
-            a.addEventListener('click', (e) => e.preventDefault(), true);
+        // 禁用所有链接和点击事件
+        const disableLinks = () => {
+            document.querySelectorAll('a').forEach(a => {
+                a.style.pointerEvents = 'none';
+            });
+            document.body.style.pointerEvents = 'auto';
+        };
+
+        // 添加样式
+        const style = document.createElement('style');
+        style.textContent = \`
+            * {
+                cursor: crosshair !important;
+            }
+            .xpath-highlight {
+                outline: 2px solid #2196F3 !important;
+                outline-offset: 1px !important;
+                background-color: rgba(33, 150, 243, 0.1) !important;
+                position: relative !important;
+            }
+            .xpath-highlight::after {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background-color: rgba(33, 150, 243, 0.1) !important;
+                pointer-events: none;
+                z-index: 10000;
+            }
+            .xpath-highlight * {
+                background-color: rgba(33, 150, 243, 0.1) !important;
+            }
+            a, button, input, select {
+                pointer-events: none !important;
+            }
+            body {
+                pointer-events: auto !important;
+            }
+        \`;
+        document.head.appendChild(style);
+
+        // 初始化选择器
+        const initSelector = () => {
+            isSelecting = true;
+            disableLinks();
+            document.addEventListener('mousemove', handleMouseMove, true);
+            document.addEventListener('click', handleClick, true);
+            document.addEventListener('mousedown', (e) => e.preventDefault(), true);
+            document.addEventListener('mouseup', (e) => e.preventDefault(), true);
+            document.addEventListener('contextmenu', (e) => e.preventDefault(), true);
+        };
+
+        // 监听来自父窗口的消息
+        window.addEventListener('message', (event) => {
+            if (event.data.type === 'INJECT_SELECTOR') {
+                initSelector();
+            }
         });
+
+        // 防止页面跳转
+        window.onbeforeunload = (e) => {
+            if (isSelecting) {
+                e.preventDefault();
+                return false;
+            }
+        };
     })();
 </script>
 `;
