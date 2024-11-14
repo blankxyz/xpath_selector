@@ -175,9 +175,44 @@ const selectorScript = `
         // 监听来自父窗口的消息
         window.addEventListener('message', (event) => {
             if (event.data.type === 'INJECT_SELECTOR') {
+                isSelecting = true;
                 initSelector();
+            } else if (event.data.type === 'STOP_SELECTOR') {
+                cleanupSelector();
             }
         });
+
+        // 清理选择器
+        const cleanupSelector = () => {
+            // 移除所有事件监听器
+            document.removeEventListener('click', handleClick, true);
+            document.removeEventListener('mousedown', handleMouseDown, true);
+            document.removeEventListener('mousemove', handleMouseMove, true);
+            document.removeEventListener('mouseup', handleMouseUp, true);
+            
+            // 移除所有高亮效果和选择标记
+            clearHighlights();
+            
+            // 移除所有选择标记
+            const markers = document.querySelectorAll('.xpath-selection-marker');
+            markers.forEach(el => el.remove());
+            
+            // 恢复原始样式
+            document.body.style.cursor = '';
+            document.querySelectorAll('*').forEach(el => {
+                if (el instanceof HTMLElement) {
+                    el.style.pointerEvents = 'auto';
+                }
+            });
+
+            // 移除样式标签
+            const injectedStyle = document.querySelector('style');
+            if (injectedStyle && injectedStyle.textContent.includes('cursor: crosshair')) {
+                injectedStyle.remove();
+            }
+            
+             isSelecting = false;
+        };
 
         // 防止页面跳转
         window.onbeforeunload = (e) => {
@@ -227,6 +262,8 @@ async function handleProxy(request: Request) {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
             'Accept': '*/*',
             'Accept-Language': 'zh-CN,zh;q=0.9',
+            'Origin': baseUrl,
+            'Referer': targetUrl,
         });
 
         const response = await fetch(targetUrl, {
@@ -312,19 +349,30 @@ async function handleProxy(request: Request) {
                     'Access-Control-Allow-Origin': '*',
                     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
                     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+                    'Content-Security-Policy': "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;",
+                    'X-Frame-Options': 'SAMEORIGIN'
                 }
             });
         }
 
         // 对于非 HTML 内容，直接转发
         const responseData = await response.arrayBuffer();
-        return new NextResponse(responseData, {
-            headers: {
+        const responseHeaders = new Headers({
                 'Content-Type': contentType,
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
                 'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-            }
+                'Access-Control-Expose-Headers': '*'
+        });
+
+        // 复制原始响应的其他重要头
+        ['content-disposition', 'content-length'].forEach(header => {
+            const value = response.headers.get(header);
+            if (value) responseHeaders.set(header, value);
+        });
+
+        return new NextResponse(responseData, {
+            headers: responseHeaders
         });
 
     } catch (error) {

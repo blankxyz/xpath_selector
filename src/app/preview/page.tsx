@@ -2,6 +2,28 @@
 
 import { useState, useEffect, useRef } from 'react';
 
+
+interface ListPageForm {
+    web_name: string;
+    account_code: string;
+    project_name: string;
+    column_name: string;
+    xpath: string;
+    xpath_type: '1';
+    url: string;
+}
+
+interface DetailPageForm {
+    web_name: string;
+    account_code: string;
+    project_name: string;
+    xpath_type: '2';
+    url: string;
+    details_title_xpath: string;
+    details_content_xpath: string;
+    details_publishtime_xpath: string;
+}
+
 export default function XPathSelector() {
     const [url, setUrl] = useState('');
     const [proxyUrl, setProxyUrl] = useState('');
@@ -19,7 +41,81 @@ export default function XPathSelector() {
     const isDraggingRef = useRef(false);
     const startXRef = useRef(0);
     const startWidthRef = useRef(0);
+    // 添加当前激活的输入框状态
+    const [activeInput, setActiveInput] = useState<string>('');
+    // Add loading state for submission
+    const [submitting, setSubmitting] = useState(false);
 
+    // 添加表单类型状态
+    const [formType, setFormType] = useState<'list' | 'detail'>('list');
+    
+    // 添加表单数据状态
+    const [listForm, setListForm] = useState<ListPageForm>({
+        web_name: '',
+        account_code: '',
+        project_name: '',
+        column_name: '',
+        xpath: '',
+        xpath_type: '1',
+        url: ''
+    });
+
+    const [detailForm, setDetailForm] = useState<DetailPageForm>({
+        web_name: '',
+        account_code: '',
+        project_name: '',
+        xpath_type: '2',
+        url: '',
+        details_title_xpath: '',
+        details_content_xpath: '',
+        details_publishtime_xpath: ''
+    });
+
+
+        // Add submit handler function
+    const handleSubmit = async () => {
+        try {
+            setSubmitting(true);
+            setError('');
+
+            const formData = formType === 'list' ? {
+                ...listForm,
+                url: url,
+                xpath_type: '1'
+            } : {
+                ...detailForm,
+                url: url,
+                xpath_type: '2'
+            };
+
+            // 在提交前检查数据
+            console.log('Form type:', formType);
+            console.log('URL:', url);
+            console.log('List form:', listForm);
+            console.log('Detail form:', detailForm);
+            console.log('Submitting data:', formData);
+
+            const response = await fetch('/api/xpath', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(formData),
+            });
+
+            if (!response.ok) {
+                throw new Error('提交失败');
+            }
+            console.log('Submitting data:', JSON.stringify(formData, null, 2));
+            // Success message or redirect could be added here
+            alert('XPath规则提交成功！');
+        } catch (err) {
+            setError(err instanceof Error ? err.message : '提交失败');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+    
     // 处理URL加载
     const loadUrl = async () => {
         if (!url) {
@@ -35,7 +131,7 @@ export default function XPathSelector() {
 
             // 使用代理URL
             const encodedUrl = encodeURIComponent(url);
-            setProxyUrl(`/api/proxy?url=${encodedUrl}`);
+            setProxyUrl(`/api/proxy?url=${encodedUrl}&js=true`);
         } catch (err) {
             setError('加载页面时出错');
         } finally {
@@ -43,13 +139,34 @@ export default function XPathSelector() {
         }
     };
 
-    // 开始选择模式
-    const startSelection = () => {
-        setIsSelecting(true);
-        if (iframeRef.current?.contentWindow) {
-            iframeRef.current.contentWindow.postMessage({ 
-                type: 'INJECT_SELECTOR' 
-            }, '*');
+    // // 开始选择模式
+    // const startSelection = () => {
+    //     setIsSelecting(true);
+    //     if (iframeRef.current?.contentWindow) {
+    //         iframeRef.current.contentWindow.postMessage({ 
+    //             type: 'INJECT_SELECTOR' 
+    //         }, '*');
+    //     }
+    // };
+
+    // 修改开始选择函数
+    const toggleSelection = () => {
+        if (isSelecting) {
+            // 结束选择
+            setIsSelecting(false);
+            if (iframeRef.current?.contentWindow) {
+                iframeRef.current.contentWindow.postMessage({ 
+                    type: 'STOP_SELECTOR' 
+                }, '*');
+            }
+        } else {
+            // 开始选择
+            setIsSelecting(true);
+            if (iframeRef.current?.contentWindow) {
+                iframeRef.current.contentWindow.postMessage({ 
+                    type: 'INJECT_SELECTOR' 
+                }, '*');
+            }
         }
     };
 
@@ -97,20 +214,45 @@ export default function XPathSelector() {
 
     // 监听 XPath 选择消息
     useEffect(() => {
+        // const handleMessage = (event: MessageEvent) => {
+        //     if (event.data.type === 'XPATH_SELECTED') {
+        //         const { xpath, innerHTML } = event.data;
+        //         setSelectedXPaths(prev => [...prev, {
+        //             xpath,
+        //             sample: innerHTML.slice(0, 100) + (innerHTML.length > 100 ? '...' : ''),
+        //             note: ''
+        //         }]);
+        //     }
+        // };
+
         const handleMessage = (event: MessageEvent) => {
             if (event.data.type === 'XPATH_SELECTED') {
-                const { xpath, innerHTML } = event.data;
-                setSelectedXPaths(prev => [...prev, {
-                    xpath,
-                    sample: innerHTML.slice(0, 100) + (innerHTML.length > 100 ? '...' : ''),
-                    note: ''
-                }]);
+                const { xpath } = event.data;
+                
+                // 根据当前表单类型和激活的输入框填入 XPath
+                if (formType === 'list') {
+                    if (activeInput === 'xpath') {
+                        setListForm(prev => ({...prev, xpath}));
+                    }
+                } else {
+                    switch (activeInput) {
+                        case 'title':
+                            setDetailForm(prev => ({...prev, details_title_xpath: xpath}));
+                            break;
+                        case 'content':
+                            setDetailForm(prev => ({...prev, details_content_xpath: xpath}));
+                            break;
+                        case 'time':
+                            setDetailForm(prev => ({...prev, details_publishtime_xpath: xpath}));
+                            break;
+                    }
+                }
             }
         };
 
         window.addEventListener('message', handleMessage);
         return () => window.removeEventListener('message', handleMessage);
-    }, []);
+    }, [formType, activeInput]);
 
     // 清理拖动事件监听
     useEffect(() => {
@@ -129,14 +271,67 @@ export default function XPathSelector() {
         });
     };
 
+
+    // 添加生成爬虫代码的状态
+    const [generatingCode, setGeneratingCode] = useState(false);
+
+    // 添加生成爬虫代码的处理函数
+    const handleGenerateSpiderCode = async () => {
+        try {
+            setGeneratingCode(true);
+            setError('');
+
+            // 使用当前表单中的数据
+            const data = {
+                account_code: formType === 'list' ? listForm.account_code : detailForm.account_code,
+                project_name: formType === 'list' ? listForm.project_name : detailForm.project_name,
+            };
+
+            console.log('Generating spider code with data:', data);
+
+            const response = await fetch('/api/gencode', {
+                method: 'POST',
+                headers: {
+                    'accept': '*/*',
+                    'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
+                    'content-type': 'application/x-www-form-urlencoded',
+                    'priority': 'u=1, i',
+                    'sec-ch-ua': '"Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"',
+                    'sec-ch-ua-mobile': '?0',
+                    'sec-ch-ua-platform': '"Windows"',
+                    'sec-fetch-dest': 'empty',
+                    'sec-fetch-mode': 'cors',
+                    'sec-fetch-site': 'same-origin',
+                    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+                  },
+                body: JSON.stringify(data),
+            });
+
+            // console.log('Response:', response.ok);
+            if (!response.ok) {
+                throw new Error('生成爬虫代码失败');
+            }
+
+
+        } catch (err) {
+            console.error('Generate Spider Code Error:', err);
+            setError(err instanceof Error ? err.message : '生成爬虫代码失败');
+        } finally {
+            setGeneratingCode(false);
+        }
+    };
+
+    
     return (
+
         <div className="selector-container">
+            <div className="control-panel" style={{ width: controlPanelWidth }}>
             <div 
                 className="control-panel"
                 style={{ width: controlPanelWidth }}
             >
                 <h2 className="panel-title">XPath 选择器</h2>
-                
+
                 <div className="input-group">
                     <input
                         type="url"
@@ -154,7 +349,7 @@ export default function XPathSelector() {
                         {loading ? '加载中...' : '加载页面'}
                     </button>
                     
-                    {proxyUrl && (
+                    {/* {proxyUrl && (
                         <button 
                             onClick={startSelection}
                             className={`select-button ${isSelecting ? 'active' : ''}`}
@@ -162,9 +357,149 @@ export default function XPathSelector() {
                         >
                             {isSelecting ? '正在选择' : '开始选择'}
                         </button>
+                    )} */}
+            
+                    {proxyUrl && (
+                        <button 
+                            onClick={toggleSelection}
+                            className={`select-button ${isSelecting ? 'active' : ''}`}
+                            disabled={!proxyUrl || loading}
+                        >
+                            {isSelecting ? '结束选择' : '开始选择'}
+                        </button>
                     )}
+                    
+                </div>
+                <div className="form-type-selector">
+                    <button 
+                        className={`form-type-button ${formType === 'list' ? 'active' : ''}`}
+                        onClick={() => setFormType('list')}
+                    >
+                        列表页配置
+                    </button>
+                    <button 
+                        className={`form-type-button ${formType === 'detail' ? 'active' : ''}`}
+                        onClick={() => setFormType('detail')}
+                    >
+                        详情页配置
+                    </button>
                 </div>
 
+                {formType === 'list' ? (
+                    <div className="form-fields">
+                        <input
+                            type="text"
+                            placeholder="网站名称"
+                            value={listForm.web_name}
+                            onChange={(e) => setListForm({...listForm, web_name: e.target.value})}
+                            className="form-input"
+                        />
+                        <input
+                            type="text"
+                            placeholder="账号唯一标识"
+                            value={listForm.account_code}
+                            onChange={(e) => setListForm({...listForm, account_code: e.target.value})}
+                            className="form-input"
+                        />
+                        <input
+                            type="text"
+                            placeholder="项目名称"
+                            value={listForm.project_name}
+                            onChange={(e) => setListForm({...listForm, project_name: e.target.value})}
+                            className="form-input"
+                        />
+                        <input
+                            type="text"
+                            placeholder="栏目名称"
+                            value={listForm.column_name}
+                            onChange={(e) => setListForm({...listForm, column_name: e.target.value})}
+                            className="form-input"
+                        />
+                        <input
+                            type="text"
+                            placeholder="列表页xpath规则"
+                            value={listForm.xpath}
+                            onChange={(e) => setListForm({...listForm, xpath: e.target.value})}
+                            onFocus={() => setActiveInput('xpath')}
+                            className="form-input xpath-input"
+                        />
+                    </div>
+                ) : (
+                    <div className="form-fields">
+                        <input
+                            type="text"
+                            placeholder="网站名称"
+                            value={detailForm.web_name}
+                            onChange={(e) => setDetailForm({...detailForm, web_name: e.target.value})}
+                            className="form-input"
+                        />
+                        <input
+                            type="text"
+                            placeholder="账号唯一标识"
+                            value={detailForm.account_code}
+                            onChange={(e) => setDetailForm({...detailForm, account_code: e.target.value})}
+                            className="form-input"
+                        />
+                        <input
+                            type="text"
+                            placeholder="项目名称"
+                            value={detailForm.project_name}
+                            onChange={(e) => setDetailForm({...detailForm, project_name: e.target.value})}
+                            className="form-input"
+                        />
+                        <input
+                            type="text"
+                            placeholder="标题xpath规则"
+                            value={detailForm.details_title_xpath}
+                            onChange={(e) => setDetailForm({...detailForm, details_title_xpath: e.target.value})}
+                            onFocus={() => setActiveInput('title')}
+                            className="form-input xpath-input"
+                        />
+                        <input
+                            type="text"
+                            placeholder="内容xpath规则"
+                            value={detailForm.details_content_xpath}
+                            onChange={(e) => setDetailForm({...detailForm, details_content_xpath: e.target.value})}
+                            onFocus={() => setActiveInput('content')}
+                            className="form-input xpath-input"
+                        />
+                        <input
+                            type="text"
+                            placeholder="发布时间xpath规则"
+                            value={detailForm.details_publishtime_xpath}
+                            onChange={(e) => setDetailForm({...detailForm, details_publishtime_xpath: e.target.value})}
+                            onFocus={() => setActiveInput('time')}
+                            className="form-input xpath-input"
+                        />
+                    </div>
+                )}
+
+                {/* Add submit button after the form fields */}
+                <div className="form-fields">
+                    {/* ... existing form fields ... */}
+                    
+                    <button 
+                        onClick={handleSubmit}
+                        className="submit-button"
+                        disabled={submitting}
+                    >
+                        {submitting ? '提交中...' : '提交 XPath 规则'}
+                    </button>
+                </div>
+
+                {/* 添加生成爬虫代码按钮 */}
+                <div className="form-fields">
+                    <button 
+                        onClick={handleGenerateSpiderCode}
+                        className="generate-spider-button"
+                        disabled={generatingCode || !listForm.account_code || !listForm.project_name}
+                    >
+                        {generatingCode ? '生成中...' : '生成爬虫代码'}
+                    </button>
+                </div>
+
+                {/* ... rest of the existing JSX ... */}
+            </div>
                 {error && <div className="error-message">{error}</div>}
 
                 <div className="selected-paths">

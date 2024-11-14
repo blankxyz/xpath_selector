@@ -94,14 +94,30 @@ html, body {
 /* 按钮样式 */
 .load-button,
 .select-button {
-  width: 100%;
-  padding: 8px 12px;
+  padding: 8px 16px;
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
+  background-color: #4CAF50;
+  color: white;
+}
+
+.select-button:hover {
+  background-color: #45a049;
+}
+
+.select-button.active {
+  background-color: #f44336;
+}
+
+.select-button.active:hover {
+  background-color: #da190b;
+}
+
+.select-button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
 }
 
 .load-button{
@@ -114,17 +130,27 @@ html, body {
   background-color: #1976D2;
 }
 
-.select-button {
+
+.submit-button {
+  width: 100%;
+  padding: 10px;
+  margin-top: 15px;
   background-color: #4CAF50;
   color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background-color 0.3s;
 }
 
-.select-button:hover {
-  background-color: #43A047;
+.submit-button:hover {
+  background-color: #45a049;
 }
 
-.select-button.active {
-  background-color: #388E3C;
+.submit-button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
 }
 
 /* 选中的XPath列表 */
@@ -138,6 +164,28 @@ html, body {
   margin-bottom: 12px;
   color: #333;
   font-size: 16px;
+}
+
+.generate-spider-button {
+  width: 100%;
+  padding: 10px;
+  margin-top: 15px;
+  background-color: #2196F3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background-color 0.3s;
+}
+
+.generate-spider-button:hover {
+  background-color: #1976D2;
+}
+
+.generate-spider-button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
 }
 
 .xpath-item {
@@ -269,4 +317,67 @@ html, body {
   background: #f8f9fa;
   padding: 8px;
   border-radius: 4px;
+}
+
+.form-type-selector {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  padding: 10px;
+  background: #f5f5f5;
+  border-radius: 8px;
+}
+
+.form-type-button {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  border-radius: 6px;
+  background: white;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.form-type-button.active {
+  background: #2196F3;
+  color: white;
+  box-shadow: 0 2px 4px rgba(33, 150, 243, 0.2);
+}
+
+.form-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.form-input {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: #2196F3;
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+}
+
+.xpath-input {
+  font-family: monospace;
+  background: #f8f9fa;
+}
+
+.xpath-input:focus {
+  outline: none;
+  border-color: #2196F3;
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+  background-color: #f0f7ff;
+}
+
+.xpath-input.active {
+  border-color: #2196F3;
+  background-color: #f0f7ff;
 }
